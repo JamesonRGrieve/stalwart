@@ -27670,7 +27670,7 @@ impl RegistryJsonPropertyPatch for MtaQueueQuota {
 
 impl ObjectImpl for MtaRoute {
     const FLAGS: u64 = 0;
-    const VERSION: u8 = 0;
+    const VERSION: u8 = 1;
     const OBJECT: ObjectType = ObjectType::MtaRoute;
 
     fn validate(&self, errors: &mut Vec<ValidationError>) -> bool {
@@ -27969,6 +27969,12 @@ impl MtaRouteRelay {
                 errors.push(ValidationError::required(Property::AuthUsername));
             }
         }
+        let value = &self.auth_oauth2_client_secret;
+        value.validate(errors);
+        let value = &self.auth_oauth2_refresh_token;
+        value.validate(errors);
+        let value = &self.auth_oauth2_token;
+        value.validate(errors);
         let value = &self.port;
         if *value > 65535 {
             errors.push(ValidationError::max_value(Property::Port, 65535));
@@ -28004,6 +28010,12 @@ impl Pickle for MtaRouteRelay {
         self.implicit_tls.pickle(out);
         self.name.pickle(out);
         self.description.pickle(out);
+        self.auth_oauth2_client_id.pickle(out);
+        self.auth_oauth2_client_secret.pickle(out);
+        self.auth_oauth2_refresh_token.pickle(out);
+        self.auth_oauth2_scope.pickle(out);
+        self.auth_oauth2_token.pickle(out);
+        self.auth_oauth2_token_url.pickle(out);
     }
 
     fn unpickle(stream: &mut crate::pickle::PickledStream<'_>) -> Option<Self> {
@@ -28017,6 +28029,14 @@ impl Pickle for MtaRouteRelay {
         this.implicit_tls = Pickle::unpickle(stream)?;
         this.name = Pickle::unpickle(stream)?;
         this.description = Pickle::unpickle(stream)?;
+        if stream.version() >= 1 {
+            this.auth_oauth2_client_id = Pickle::unpickle(stream)?;
+            this.auth_oauth2_client_secret = Pickle::unpickle(stream)?;
+            this.auth_oauth2_refresh_token = Pickle::unpickle(stream)?;
+            this.auth_oauth2_scope = Pickle::unpickle(stream)?;
+            this.auth_oauth2_token = Pickle::unpickle(stream)?;
+            this.auth_oauth2_token_url = Pickle::unpickle(stream)?;
+        }
         Some(this)
     }
 }
@@ -28033,13 +28053,19 @@ impl Default for MtaRouteRelay {
             implicit_tls: false,
             name: Default::default(),
             description: Default::default(),
+            auth_oauth2_client_id: Default::default(),
+            auth_oauth2_client_secret: Default::default(),
+            auth_oauth2_refresh_token: Default::default(),
+            auth_oauth2_scope: Default::default(),
+            auth_oauth2_token: Default::default(),
+            auth_oauth2_token_url: Default::default(),
         }
     }
 }
 
 impl IntoValue for MtaRouteRelay {
     fn into_value(self) -> JmapValue<'static> {
-        let mut map = jmap_tools::Map::with_capacity(11);
+        let mut map = jmap_tools::Map::with_capacity(17);
         map.insert_unchecked(Property::Address, self.address.into_value());
         map.insert_unchecked(Property::AuthSecret, self.auth_secret.into_value());
         map.insert_unchecked(Property::AuthUsername, self.auth_username.into_value());
@@ -28052,6 +28078,24 @@ impl IntoValue for MtaRouteRelay {
         map.insert_unchecked(Property::ImplicitTls, self.implicit_tls.into_value());
         map.insert_unchecked(Property::Name, self.name.into_value());
         map.insert_unchecked(Property::Description, self.description.into_value());
+        map.insert_unchecked(
+            Property::AuthOauth2ClientId,
+            self.auth_oauth2_client_id.into_value(),
+        );
+        map.insert_unchecked(
+            Property::AuthOauth2ClientSecret,
+            self.auth_oauth2_client_secret.into_value(),
+        );
+        map.insert_unchecked(
+            Property::AuthOauth2RefreshToken,
+            self.auth_oauth2_refresh_token.into_value(),
+        );
+        map.insert_unchecked(Property::AuthOauth2Scope, self.auth_oauth2_scope.into_value());
+        map.insert_unchecked(Property::AuthOauth2Token, self.auth_oauth2_token.into_value());
+        map.insert_unchecked(
+            Property::AuthOauth2TokenUrl,
+            self.auth_oauth2_token_url.into_value(),
+        );
         JmapValue::Object(map)
     }
 }
@@ -28074,6 +28118,18 @@ impl RegistryJsonPropertyPatch for MtaRouteRelay {
             Some(Property::ImplicitTls) => self.implicit_tls.patch(pointer, value),
             Some(Property::Name) => self.name.patch(pointer.assert_read_only()?, value),
             Some(Property::Description) => self.description.patch(pointer, value),
+            Some(Property::AuthOauth2ClientId) => {
+                self.auth_oauth2_client_id.patch(pointer, value)
+            }
+            Some(Property::AuthOauth2ClientSecret) => {
+                self.auth_oauth2_client_secret.patch(pointer, value)
+            }
+            Some(Property::AuthOauth2RefreshToken) => {
+                self.auth_oauth2_refresh_token.patch(pointer, value)
+            }
+            Some(Property::AuthOauth2Scope) => self.auth_oauth2_scope.patch(pointer, value),
+            Some(Property::AuthOauth2Token) => self.auth_oauth2_token.patch(pointer, value),
+            Some(Property::AuthOauth2TokenUrl) => self.auth_oauth2_token_url.patch(pointer, value),
             Some(Property::Type) => Ok(MaybeUnpatched::Unpatched {
                 property: Property::Type,
                 value,

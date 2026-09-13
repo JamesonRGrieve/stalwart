@@ -322,6 +322,14 @@ impl NextHop<'_> {
     }
 
     #[inline(always)]
+    fn oauth2(&self) -> Option<&std::sync::Arc<common::config::smtp::oauth2::OutboundOauth2>> {
+        match self {
+            NextHop::MX { .. } => None,
+            NextHop::Relay(host) => host.oauth2.as_ref(),
+        }
+    }
+
+    #[inline(always)]
     fn allow_invalid_certs(&self) -> bool {
         #[cfg(feature = "test_mode")]
         {

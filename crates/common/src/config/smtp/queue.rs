@@ -7,6 +7,7 @@
 use super::*;
 use crate::{
     config::server::ServerProtocol,
+    config::smtp::oauth2::{Oauth2Config, OutboundOauth2},
     expr::{
         if_block::{BootstrapExprExt, IfBlock},
         *,
@@ -21,7 +22,8 @@ use registry::schema::{
     structs::{
         DsnReportSettings, MtaConnectionStrategy, MtaDeliveryExpiration, MtaDeliverySchedule,
         MtaDeliveryScheduleIntervalsOrDefault, MtaInboundThrottle, MtaOutboundStrategy,
-        MtaOutboundThrottle, MtaQueueQuota, MtaRoute, MtaTlsStrategy, MtaVirtualQueue,
+        MtaOutboundThrottle, MtaQueueQuota, MtaRoute, MtaRouteRelay, MtaTlsStrategy,
+        MtaVirtualQueue, SecretKeyOptional,
     },
 };
 use std::{
@@ -183,6 +185,7 @@ pub struct RelayConfig {
     pub port: u16,
     pub protocol: ServerProtocol,
     pub auth: Option<Credentials>,
+    pub oauth2: Option<std::sync::Arc<OutboundOauth2>>,
     pub tls_implicit: bool,
     pub tls_allow_invalid_certs: bool,
 }
@@ -377,6 +380,7 @@ impl QueueConfig {
                             bp.build_error(obj.id, err);
                         })
                         .unwrap_or_default();
+                    let oauth2 = build_relay_oauth2(&route, bp, obj.id).await;
                     queue.routing_strategy.insert(
                         route.name,
                         RoutingStrategy::Relay(RelayConfig {
@@ -400,6 +404,7 @@ impl QueueConfig {
                                     mfa_token: None,
                                 }
                             }),
+                            oauth2,
                             tls_implicit: route.implicit_tls,
                             tls_allow_invalid_certs: route.allow_invalid_certs,
                         }),
@@ -442,6 +447,63 @@ impl QueueConfig {
 
         queue
     }
+}
+
+async fn resolve_secret(
+    key: &SecretKeyOptional,
+    bp: &mut Bootstrap,
+    obj_id: ObjectId,
+) -> Option<String> {
+    match key {
+        SecretKeyOptional::None => None,
+        other => other
+            .secret()
+            .await
+            .map_err(|err| bp.build_error(obj_id, err))
+            .ok()
+            .flatten()
+            .map(std::borrow::Cow::into_owned),
+    }
+}
+
+/// Resolves the outbound OAuth2 credentials of a relay route, if configured.
+/// `auth_username` doubles as the XOAUTH2 `user=` identity; a static token
+/// (`authOauth2Token`) takes precedence over the token endpoint.
+async fn build_relay_oauth2(
+    route: &MtaRouteRelay,
+    bp: &mut Bootstrap,
+    obj_id: ObjectId,
+) -> Option<std::sync::Arc<OutboundOauth2>> {
+    let token = resolve_secret(&route.auth_oauth2_token, bp, obj_id).await;
+    let refresh_token = resolve_secret(&route.auth_oauth2_refresh_token, bp, obj_id).await;
+    let client_secret = resolve_secret(&route.auth_oauth2_client_secret, bp, obj_id).await;
+    let token_url = route.auth_oauth2_token_url.clone();
+
+    if token.is_some() && token_url.is_some() {
+        bp.build_error(
+            obj_id,
+            "Relay OAuth2: a static token (authOauth2Token) and a token endpoint \
+             (authOauth2TokenUrl) are mutually exclusive"
+                .to_string(),
+        );
+        return None;
+    }
+    if let Some(client_id) = &route.auth_oauth2_client_id
+        && client_id.is_empty()
+    {
+        bp.build_error(obj_id, "Relay OAuth2: authOauth2ClientId must not be empty".to_string());
+    }
+
+    let config = Oauth2Config {
+        username: route.auth_username.clone(),
+        token,
+        token_url,
+        refresh_token,
+        client_id: route.auth_oauth2_client_id.clone(),
+        client_secret,
+        scope: route.auth_oauth2_scope.clone(),
+    };
+    OutboundOauth2::try_new(&config).map(std::sync::Arc::new)
 }
 
 impl QueueRateLimiters {

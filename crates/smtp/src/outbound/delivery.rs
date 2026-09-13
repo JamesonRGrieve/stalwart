@@ -1117,10 +1117,41 @@ impl QueuedMessage {
                         .and_then(|ip| ip.host.as_deref())
                         .or(conn_strategy.ehlo_hostname.as_deref())
                         .unwrap_or(server.core.network.server_name.as_str());
+
+                    // Resolve outbound OAuth2 credentials for the relay when no
+                    // basic credentials are configured.
+                    let mut oauth2_credentials: Option<directory::Credentials> = None;
+                    let basic_credentials = remote_host.credentials();
+                    if basic_credentials.is_none()
+                        && let Some(oauth2) = remote_host.oauth2()
+                    {
+                        match oauth2.access_token().await {
+                            Ok(token) => {
+                                oauth2_credentials = Some(directory::Credentials::Bearer {
+                                    username: oauth2.username().map(str::to_string),
+                                    token,
+                                });
+                            }
+                            Err(err) => {
+                                trc::error!(
+                                    trc::EventType::Smtp(trc::SmtpEvent::Error)
+                                        .into_err()
+                                        .details("Relay OAuth2 token")
+                                        .reason(&err)
+                                );
+                                last_status = Status::TemporaryFailure(ErrorDetails {
+                                    entity: envelope.mx.into(),
+                                    details: Error::Io(err.to_string().into()),
+                                });
+                                continue 'next_host;
+                            }
+                        }
+                    }
+
                     let mut params = SessionParams {
                         session_id: message.span_id,
                         server: &server,
-                        credentials: remote_host.credentials(),
+                        credentials: basic_credentials.or(oauth2_credentials.as_ref()),
                         is_smtp: remote_host.is_smtp(),
                         hostname: envelope.mx,
                         local_hostname,
