@@ -3814,6 +3814,18 @@ pub struct MtaRouteRelay {
     pub name: String,
     #[serde(rename = "description")]
     pub description: Option<String>,
+    #[serde(rename = "authOauth2ClientId")]
+    pub auth_oauth2_client_id: Option<String>,
+    #[serde(rename = "authOauth2ClientSecret")]
+    pub auth_oauth2_client_secret: SecretKeyOptional,
+    #[serde(rename = "authOauth2RefreshToken")]
+    pub auth_oauth2_refresh_token: SecretKeyOptional,
+    #[serde(rename = "authOauth2Scope")]
+    pub auth_oauth2_scope: Option<String>,
+    #[serde(rename = "authOauth2Token")]
+    pub auth_oauth2_token: SecretKeyOptional,
+    #[serde(rename = "authOauth2TokenUrl")]
+    pub auth_oauth2_token_url: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
