@@ -23,6 +23,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      # Registry references must be lowercase; the repository owner is not.
+      - name: Resolve cache repository
+        run: echo "GHCR_REPO=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
         with:
@@ -44,7 +48,6 @@ jobs:
         env:
           DOCKER_BUILD_RECORD_UPLOAD: false
           BUILD_ENV: ""
-          GHCR_REPO: ghcr.io/${{github.repository}}
         with:
           source: .
           files: docker-bake.hcl
