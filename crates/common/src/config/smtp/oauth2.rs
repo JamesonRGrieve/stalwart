@@ -47,8 +47,9 @@ impl std::fmt::Display for Oauth2Error {
 }
 
 /// Resolved OAuth2 configuration for a relay. All secret material is resolved
-/// to plain values at bootstrap time.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+/// to plain values at bootstrap time; `Debug` reports only whether each secret
+/// is present.
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Oauth2Config {
     /// Identity advertised in the XOAUTH2 `user=` field.
     pub username: Option<String>,
@@ -67,6 +68,20 @@ pub struct Oauth2Config {
     pub client_secret: Option<String>,
     /// Scope requested on the token endpoint.
     pub scope: Option<String>,
+}
+
+impl std::fmt::Debug for Oauth2Config {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Oauth2Config")
+            .field("username", &self.username)
+            .field("token", &self.token.as_ref().map(|_| "<redacted>"))
+            .field("token_url", &self.token_url)
+            .field("refresh_token", &self.refresh_token.as_ref().map(|_| "<redacted>"))
+            .field("client_id", &self.client_id)
+            .field("client_secret", &self.client_secret.as_ref().map(|_| "<redacted>"))
+            .field("scope", &self.scope)
+            .finish()
+    }
 }
 
 #[derive(Default)]
@@ -408,6 +423,21 @@ mod tests {
             client_secret: None,
             scope: None,
         }
+    }
+
+    #[test]
+    fn debug_output_redacts_secrets() {
+        let mut config = config();
+        config.username = Some("user@example.org".into());
+        config.token = Some("static-secret".into());
+        config.refresh_token = Some("refresh-secret".into());
+        config.client_secret = Some("client-secret".into());
+        let provider = OutboundOauth2::try_new(&config).unwrap();
+        let rendered = format!("{provider:?}");
+        for secret in ["static-secret", "refresh-secret", "client-secret"] {
+            assert!(!rendered.contains(secret), "{rendered} leaks {secret}");
+        }
+        assert!(rendered.contains("user@example.org"), "{rendered}");
     }
 
     #[tokio::test]
