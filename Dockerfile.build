@@ -93,7 +93,7 @@ ARG FDB_VERSION_RANGE="7.4"
 RUN \
     source /env-cargo && \
     if [ ! -z "${FDB_ARCH}" ]; then \
-        curl --retry 5 -fLso fdb-client.deb "$(curl --retry 5 -fLs 'https://api.github.com/repos/apple/foundationdb/releases?per_page=100' | jq --arg FDB_ARCH "$FDB_ARCH" --arg RANGE "${FDB_VERSION_RANGE}" -r '[.[] | select(.tag_name | startswith($RANGE + "."))] | sort_by(.tag_name | split(".") | map(tonumber)) | reverse | .[0].assets[] | select(.name | test("foundationdb-clients.*" + $FDB_ARCH + ".deb$")) | .browser_download_url')" && \
+        curl --retry 5 -fLso fdb-client.deb "$(curl --retry 5 -fLs 'https://api.github.com/repos/apple/foundationdb/releases?per_page=100' | jq --arg FDB_ARCH "$FDB_ARCH" --arg RANGE "${FDB_VERSION_RANGE}" -r '[.[] | select(.tag_name | startswith($RANGE + ".")) | select(any(.assets[]; .name | test("foundationdb-clients.*" + $FDB_ARCH + ".deb$")))] | sort_by(.tag_name | split(".") | map(tonumber)) | reverse | .[0].assets[] | select(.name | test("foundationdb-clients.*" + $FDB_ARCH + ".deb$")) | .browser_download_url')" && \
         mkdir -p /fdb && \
         dpkg -x fdb-client.deb /fdb && \
         mv /fdb/usr/include/foundationdb /usr/include && \
