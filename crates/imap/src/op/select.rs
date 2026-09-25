@@ -18,7 +18,7 @@ use imap_proto::{
 };
 use registry::schema::enums::Permission;
 use std::{sync::Arc, time::Instant};
-use types::id::Id;
+use types::{acl::Acl, id::Id};
 
 impl<T: SessionStream> Session<T> {
     pub async fn handle_select(&mut self, request: Request<Command>) -> trc::Result<()> {
@@ -65,6 +65,18 @@ impl<T: SessionStream> Session<T> {
             .or_else(|| data.get_mailbox_by_name(&arguments.mailbox_name));
 
         if let Some(mailbox) = mailbox {
+            if !data
+                .check_mailbox_acl(mailbox.account_id, mailbox.mailbox_id, Acl::ReadItems)
+                .await
+                .imap_ctx(&arguments.tag, trc::location!())?
+            {
+                return Err(trc::ImapEvent::Error
+                    .into_err()
+                    .details("You do not have the required permissions to read this mailbox.")
+                    .code(ResponseCode::NoPerm)
+                    .id(arguments.tag));
+            }
+
             // Try obtaining the mailbox from the cache
             let state = data
                 .fetch_messages(&mailbox, None)

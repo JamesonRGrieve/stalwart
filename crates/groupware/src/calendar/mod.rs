@@ -282,7 +282,7 @@ impl CalendarEvent {
         } else {
             self.preferences.push(EventPreferences {
                 account_id,
-                flags: PREF_USE_DEFAULT_ALERTS,
+                flags: 0,
                 properties: Vec::new(),
                 alerts: Vec::new(),
             });

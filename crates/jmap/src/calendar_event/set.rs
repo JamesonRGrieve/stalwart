@@ -26,7 +26,7 @@ use groupware::{
     calendar::{
         ALERT_EMAIL, ALERT_RELATIVE_TO_END, ArchivedDefaultAlert, Calendar, CalendarEvent,
         CalendarEventData, EVENT_DRAFT, EVENT_HIDE_ATTENDEES, EVENT_INVITE_OTHERS,
-        EVENT_INVITE_SELF,
+        EVENT_INVITE_SELF, PREF_USE_DEFAULT_ALERTS,
         expand::{CalendarEventExpansion, ComponentRecurrenceId, RecurrenceKey, resolve_local},
         itip::ItipSendStatus,
     },
@@ -295,7 +295,7 @@ impl CalendarEventSet for Server {
 
             // Process changes
             if let Err(err) = update_calendar_event(
-                access_token,
+                access_token.personal_id(account_id, Collection::Calendar),
                 update.base_id,
                 update.base_patch.take().unwrap_or_default(),
                 &mut new_calendar_event,
@@ -711,7 +711,7 @@ impl CalendarEventSet for Server {
         // Process changes
         let mut event = CalendarEvent::default();
         let use_default_alerts = match update_calendar_event(
-            access_token,
+            access_token.personal_id(account_id, Collection::Calendar),
             None,
             updates,
             &mut event,
@@ -943,7 +943,7 @@ fn stamp_updated(ical: &mut ICalendar, timestamp: i64) {
 }
 
 fn update_calendar_event<'x>(
-    _access_token: &AccessToken,
+    personal_id: u32,
     expected_id: Option<Id>,
     updates: Value<'x, JSCalendarProperty<Id>, JSCalendarValue<Id, BlobId>>,
     event: &mut CalendarEvent,
@@ -1010,6 +1010,15 @@ fn update_calendar_event<'x>(
             }
             (JSCalendarProperty::UseDefaultAlerts, Value::Bool(set)) => {
                 use_default_alerts = set;
+                if set {
+                    event.preferences_mut(personal_id).flags |= PREF_USE_DEFAULT_ALERTS;
+                } else if let Some(preferences) = event
+                    .preferences
+                    .iter_mut()
+                    .find(|p| p.account_id == personal_id)
+                {
+                    preferences.flags &= !PREF_USE_DEFAULT_ALERTS;
+                }
             }
             (JSCalendarProperty::UtcStart, Value::Element(JSCalendarValue::DateTime(start))) => {
                 utc_start = Some(start.timestamp);

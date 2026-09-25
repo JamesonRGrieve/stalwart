@@ -382,25 +382,16 @@ impl<T: SessionStream> Session<T> {
                         ))
                         .await;
 
-                let pass = matches!(dmarc_output.spf_result(), DmarcResult::Pass)
-                    || matches!(dmarc_output.dkim_result(), DmarcResult::Pass);
+                let dmarc_result = dmarc_output.result();
+                let pass = dmarc_result == DmarcResult::Pass;
                 let strict = dmarc.is_strict();
-                let rejected = strict && dmarc_output.policy() == dmarc::Policy::Reject && !pass;
-                let is_temp_fail = rejected
-                    && matches!(dmarc_output.spf_result(), DmarcResult::TempError(_))
-                    || matches!(dmarc_output.dkim_result(), DmarcResult::TempError(_));
+                let is_temp_fail = matches!(dmarc_result, DmarcResult::TempError(_));
+                let rejected = strict
+                    && dmarc_output.policy() == dmarc::Policy::Reject
+                    && (is_temp_fail || matches!(dmarc_result, DmarcResult::Fail(_)));
 
                 // Add to DMARC output to the Authentication-Results header
                 auth_results = auth_results.with_dmarc_result(&dmarc_output);
-                let dmarc_result = if pass {
-                    DmarcResult::Pass
-                } else if dmarc_output.spf_result() != &DmarcResult::None {
-                    dmarc_output.spf_result().clone()
-                } else if dmarc_output.dkim_result() != &DmarcResult::None {
-                    dmarc_output.dkim_result().clone()
-                } else {
-                    DmarcResult::None
-                };
                 let dmarc_policy = dmarc_output.policy();
 
                 trc::event!(
@@ -418,7 +409,7 @@ impl<T: SessionStream> Session<T> {
                 );
 
                 // Send DMARC report
-                if dmarc_output.requested_reports() && !is_report {
+                if dmarc_output.requested_reports() && !is_report && !(rejected && is_temp_fail) {
                     self.send_dmarc_report(
                         &auth_message,
                         &auth_results,
@@ -450,7 +441,7 @@ impl<T: SessionStream> Session<T> {
             if !rc.analysis.forward {
                 self.data
                     .rcpt_to
-                    .retain(|rcpt| !rc.analysis.is_report_address(rcpt.report_address()));
+                    .retain(|rcpt| !rc.analysis.is_report_address(rcpt.orig_address()));
             }
 
             if self.data.rcpt_to.is_empty() {

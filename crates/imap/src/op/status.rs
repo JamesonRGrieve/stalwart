@@ -24,7 +24,7 @@ use imap_proto::{
 use registry::schema::enums::Permission;
 use std::time::Instant;
 use trc::AddContext;
-use types::{id::Id, keyword::Keyword};
+use types::{acl::Acl, id::Id, keyword::Keyword};
 
 impl<T: SessionStream> Session<T> {
     pub async fn handle_status(&mut self, requests: Vec<Request<Command>>) -> trc::Result<()> {
@@ -163,6 +163,17 @@ impl<T: SessionStream> SessionData<T> {
                     .code(ResponseCode::NonExistent))
             };
         };
+
+        if !self
+            .check_mailbox_acl(mailbox.account_id, mailbox.mailbox_id, Acl::ReadItems)
+            .await
+            .caused_by(trc::location!())?
+        {
+            return Err(trc::ImapEvent::Error
+                .into_err()
+                .details("You do not have the required permissions to read this mailbox.")
+                .code(ResponseCode::NoPerm));
+        }
 
         // Make sure all requested fields are up to date
         let mut items_update = Vec::with_capacity(items.len());
